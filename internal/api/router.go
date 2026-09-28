@@ -24,7 +24,17 @@ func NewRouter(runtime *service.Runtime) http.Handler {
 		api.Get("/interlocks", handler.interlocks)
 		api.Get("/incidents", handler.incidents)
 		api.Get("/recovery", handler.recoveryStatus)
-		api.Post("/jobs/current/cancel", handler.cancelCurrent)
+		api.Get("/jobs/current/cancel", handler.cancelCurrent)
+		api.Get("/schedule/plan", handler.schedulePlan)
+		api.Get("/schedule/orders", handler.scheduleOrders)
+		api.Post("/schedule/orders", handler.createScheduleOrder)
+		api.Put("/schedule/orders/{id}", handler.updateScheduleOrder)
+		api.Post("/schedule/orders/{id}/start", handler.startScheduleOrder)
+		api.Post("/schedule/orders/{id}/complete", handler.completeScheduleOrder)
+		api.Post("/schedule/orders/{id}/cancel", handler.cancelScheduleOrder)
+		api.Get("/schedule/downtimes", handler.scheduleDowntimes)
+		api.Post("/schedule/downtimes", handler.createScheduleDowntime)
+		api.Delete("/schedule/downtimes/{id}", handler.deleteScheduleDowntime)
 	})
 	return router
 }

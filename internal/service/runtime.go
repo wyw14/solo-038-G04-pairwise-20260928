@@ -15,6 +15,7 @@ import (
 	"github.com/wyw14/solo-038/internal/model"
 	"github.com/wyw14/solo-038/internal/press"
 	"github.com/wyw14/solo-038/internal/register"
+	"github.com/wyw14/solo-038/internal/schedule"
 	"github.com/wyw14/solo-038/internal/sensor"
 	"github.com/wyw14/solo-038/internal/splice"
 	"github.com/wyw14/solo-038/internal/unwind"
@@ -55,6 +56,7 @@ type Runtime struct {
 	folderControl   *folder.Controller
 	splice          *splice.State
 	spliceControl   *splice.Coordinator
+	scheduler       *schedule.State
 	incidents       []Incident
 }
 
@@ -84,6 +86,7 @@ func NewRuntime(config Config) (*Runtime, error) {
 	runtime := &Runtime{startedAt: time.Now().UTC(), config: config, journal: journalStore, jobs: jobState, jobControl: job.NewCoordinator(jobState, dryerState), sensors: sensor.NewState(), unwind: unwindState, loader: unwind.NewLoader(unwindState), festoon: festoon, web: webState, webControl: web.NewCoordinator(webState, path), press: pressState, pressUnits: pressController, pressControl: press.NewCoordinator(pressController, pressState), phase: press.NewPhaseController(pressState, 2.5), ink: inkState, register: registerState, registerControl: register.NewCoordinator(registerState, journalStore), dryer: dryerState, dryerControl: dryer.NewCoordinator(dryerState), folder: folderState, folderControl: folder.NewController(folderState), splice: spliceState}
 	runtime.inkControl = ink.NewCoordinator(ink.NewCircuit(inkState))
 	runtime.spliceControl = splice.NewCoordinator(spliceState, festoon, splice.NewLeaseManager())
+	runtime.scheduler = schedule.NewState(schedule.DefaultChangeoverConfig())
 	return runtime, nil
 }
 
@@ -94,6 +97,9 @@ func (runtime *Runtime) Start(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
+	}
+	if err := runtime.scheduler.Load(filepath.Join(runtime.config.DataDir, "schedule.json"), time.Now().UTC()); err != nil {
+		return fmt.Errorf("restore schedule: %w", err)
 	}
 	if _, ok := runtime.jobs.Current(); !ok {
 		created := runtime.jobs.Create(time.Now())
