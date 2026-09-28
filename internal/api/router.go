@@ -25,6 +25,20 @@ func NewRouter(runtime *service.Runtime) http.Handler {
 		api.Get("/incidents", handler.incidents)
 		api.Get("/recovery", handler.recoveryStatus)
 		api.Post("/jobs/current/cancel", handler.cancelCurrent)
+		api.Route("/schedule", func(scheduleRouter chi.Router) {
+			scheduleRouter.Get("/", handler.getSchedule)
+			scheduleRouter.Post("/replan", handler.replan)
+			scheduleRouter.Get("/orders", handler.listScheduledOrders)
+			scheduleRouter.Post("/orders", handler.createScheduledOrder)
+			scheduleRouter.Get("/orders/{id}", handler.getScheduledOrder)
+			scheduleRouter.Put("/orders/{id}", handler.reviseScheduledOrder)
+			scheduleRouter.Post("/orders/{id}/cancel", handler.cancelScheduledOrder)
+			scheduleRouter.Post("/orders/{id}/start", handler.startScheduledOrder)
+			scheduleRouter.Post("/orders/{id}/complete", handler.completeScheduledOrder)
+			scheduleRouter.Get("/downtimes", handler.listDowntimes)
+			scheduleRouter.Post("/downtimes", handler.createDowntime)
+			scheduleRouter.Delete("/downtimes/{id}", handler.removeDowntime)
+		})
 	})
 	return router
 }

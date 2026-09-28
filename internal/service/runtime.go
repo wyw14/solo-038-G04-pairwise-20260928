@@ -15,6 +15,7 @@ import (
 	"github.com/wyw14/solo-038/internal/model"
 	"github.com/wyw14/solo-038/internal/press"
 	"github.com/wyw14/solo-038/internal/register"
+	"github.com/wyw14/solo-038/internal/schedule"
 	"github.com/wyw14/solo-038/internal/sensor"
 	"github.com/wyw14/solo-038/internal/splice"
 	"github.com/wyw14/solo-038/internal/unwind"
@@ -26,6 +27,7 @@ type Config struct {
 	FestoonCapacity   float64
 	RegisterGap       time.Duration
 	RegisterTolerance float64
+	Schedule          schedule.Config
 }
 
 type Runtime struct {
@@ -55,12 +57,16 @@ type Runtime struct {
 	folderControl   *folder.Controller
 	splice          *splice.State
 	spliceControl   *splice.Coordinator
+	scheduler       *schedule.Planner
 	incidents       []Incident
 }
 
 func NewRuntime(config Config) (*Runtime, error) {
 	if config.DataDir == "" || config.FestoonCapacity <= 0 || config.RegisterGap <= 0 || config.RegisterTolerance <= 0 {
 		return nil, fmt.Errorf("runtime configuration is incomplete")
+	}
+	if config.Schedule.DryerRampPerC == 0 {
+		config.Schedule = defaultScheduleConfig()
 	}
 	path, err := web.NewPath([]web.Segment{{Name: "unwind", Length: 4, Tension: 8, Available: true}, {Name: "press", Length: 12, Tension: 8, Available: true}, {Name: "dryer", Length: 18, Tension: 7, Available: true}, {Name: "folder", Length: 5, Tension: 6, Available: true}})
 	if err != nil {
@@ -84,7 +90,21 @@ func NewRuntime(config Config) (*Runtime, error) {
 	runtime := &Runtime{startedAt: time.Now().UTC(), config: config, journal: journalStore, jobs: jobState, jobControl: job.NewCoordinator(jobState, dryerState), sensors: sensor.NewState(), unwind: unwindState, loader: unwind.NewLoader(unwindState), festoon: festoon, web: webState, webControl: web.NewCoordinator(webState, path), press: pressState, pressUnits: pressController, pressControl: press.NewCoordinator(pressController, pressState), phase: press.NewPhaseController(pressState, 2.5), ink: inkState, register: registerState, registerControl: register.NewCoordinator(registerState, journalStore), dryer: dryerState, dryerControl: dryer.NewCoordinator(dryerState), folder: folderState, folderControl: folder.NewController(folderState), splice: spliceState}
 	runtime.inkControl = ink.NewCoordinator(ink.NewCircuit(inkState))
 	runtime.spliceControl = splice.NewCoordinator(spliceState, festoon, splice.NewLeaseManager())
+	scheduler, err := schedule.LoadPlanner(filepath.Join(config.DataDir, "schedule.json"), config.Schedule)
+	if err != nil {
+		return nil, err
+	}
+	runtime.scheduler = scheduler
 	return runtime, nil
+}
+
+func defaultScheduleConfig() schedule.Config {
+	return schedule.Config{
+		PlateChange:       20 * time.Minute,
+		InkChangePerColor: 5 * time.Minute,
+		DryerRampPerC:     30 * time.Second,
+		DryerMinPreheat:   5 * time.Minute,
+	}
 }
 
 func (runtime *Runtime) Start(ctx context.Context) error {
